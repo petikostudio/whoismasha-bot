@@ -1,4 +1,5 @@
 import logging
+import re
 import json
 import os
 import asyncio
@@ -16,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN      = os.environ.get("BOT_TOKEN", "")
 ADMIN_ID       = int(os.environ.get("ADMIN_ID", "0"))
-CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY", "")
+GONKA_API_KEY  = os.environ.get("GONKA_API_KEY", "")
+GONKA_BASE_URL = "https://proxy.gonkabroker.com/v1"
+GONKA_MODEL    = "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
 
 # ── PROGRESS BAR ─────────────────────────────────────────────────────────────
 def progress(step, total=14):
@@ -175,9 +178,9 @@ async def send_question(message: Message, idx: int):
     )
 
 # ── CLAUDE ANALYSIS ───────────────────────────────────────────────────────────
-async def get_claude_analysis(answers: dict, user_info: dict) -> str:
-    if not CLAUDE_API_KEY:
-        return "⚠️ CLAUDE_API_KEY не задан — аналитика недоступна."
+async def get_ai_analysis(answers: dict, user_info: dict) -> str:
+    if not GONKA_API_KEY:
+        return "⚠️ GONKA_API_KEY не задан — аналитика недоступна."
 
     name = user_info.get("first_name", "пользователь")
     answers_text = "\n".join([f"• {k}: {v}" for k, v in answers.items()])
@@ -205,23 +208,25 @@ async def get_claude_analysis(answers: dict, user_info: dict) -> str:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "https://api.anthropic.com/v1/messages",
+                f"{GONKA_BASE_URL}/chat/completions",
                 headers={
-                    "x-api-key": CLAUDE_API_KEY,
-                    "anthropic-version": "2023-06-01",
+                    "Authorization": f"Bearer {GONKA_API_KEY}",
                     "content-type": "application/json",
                 },
                 json={
-                    "model": "claude-sonnet-4-20250514",
+                    "model": GONKA_MODEL,
                     "max_tokens": 1000,
                     "messages": [{"role": "user", "content": prompt}],
                 },
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=60),
             ) as resp:
                 data = await resp.json()
-                return data["content"][0]["text"]
+                text = data["choices"][0]["message"]["content"]
+                # Strip Qwen3 thinking tags if present
+                text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+                return text
     except Exception as e:
-        logger.error(f"Claude API error: {e}")
+        logger.error(f"AI API error: {e}")
         return f"⚠️ Ошибка при получении аналитики: {e}"
 
 # ── HANDLERS ─────────────────────────────────────────────────────────────────
@@ -368,7 +373,7 @@ async def finish(message: Message, answers: dict, user_info: dict, bot: Bot):
 
     # 3. Claude psychological analysis
     await bot.send_message(ADMIN_ID, "🧠 Генерирую психологический анализ...")
-    analysis = await get_claude_analysis(answers, user_info)
+    analysis = await get_ai_analysis(answers, user_info)
     # Split if too long for Telegram
     if len(analysis) > 4000:
         for i in range(0, len(analysis), 4000):
