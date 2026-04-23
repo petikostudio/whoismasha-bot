@@ -221,6 +221,12 @@ async def get_ai_analysis(answers: dict, user_info: dict) -> str:
                 timeout=aiohttp.ClientTimeout(total=60),
             ) as resp:
                 data = await resp.json()
+                if "choices" not in data:
+                    logger.error(f"Unexpected API response: {data}")
+                    error_msg = data.get("error", {})
+                    if isinstance(error_msg, dict):
+                        error_msg = error_msg.get("message", str(data))
+                    return f"⚠️ API вернул неожиданный ответ: {error_msg}"
                 text = data["choices"][0]["message"]["content"]
                 # Strip Qwen3 thinking tags if present
                 text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
