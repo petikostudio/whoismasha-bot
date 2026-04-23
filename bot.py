@@ -205,35 +205,45 @@ async def get_ai_analysis(answers: dict, user_info: dict) -> str:
 
 Пиши живо, конкретно, без воды. Избегай общих фраз. Объём — примерно 400-500 слов."""
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{GONKA_BASE_URL}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {GONKA_API_KEY}",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": GONKA_MODEL,
-                    "max_tokens": 1000,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-                timeout=aiohttp.ClientTimeout(total=60),
-            ) as resp:
-                data = await resp.json()
-                if "choices" not in data:
-                    logger.error(f"Unexpected API response: {data}")
-                    error_msg = data.get("error", {})
-                    if isinstance(error_msg, dict):
-                        error_msg = error_msg.get("message", str(data))
-                    return f"⚠️ API вернул неожиданный ответ: {error_msg}"
-                text = data["choices"][0]["message"]["content"]
-                # Strip Qwen3 thinking tags if present
-                text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-                return text
-    except Exception as e:
-        logger.error(f"AI API error: {e}")
-        return f"⚠️ Ошибка при получении аналитики: {e}"
+    for attempt in range(3):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{GONKA_BASE_URL}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {GONKA_API_KEY}",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": GONKA_MODEL,
+                        "max_tokens": 1000,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as resp:
+                    data = await resp.json()
+                    if "choices" not in data:
+                        error_msg = data.get("error", {})
+                        if isinstance(error_msg, dict):
+                            msg = error_msg.get("message", str(data))
+                        else:
+                            msg = str(error_msg)
+                        if "rate limit" in msg.lower() and attempt < 2:
+                            logger.warning(f"Rate limit hit, retry {attempt + 1}/3 in 20s...")
+                            await asyncio.sleep(20)
+                            continue
+                        logger.error(f"Unexpected API response: {data}")
+                        return f"⚠️ API ошибка: {msg}"
+                    text = data["choices"][0]["message"]["content"]
+                    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+                    return text
+        except Exception as e:
+            logger.error(f"AI API error (attempt {attempt + 1}): {e}")
+            if attempt < 2:
+                await asyncio.sleep(20)
+                continue
+            return f"⚠️ Ошибка при получении аналитики: {e}"
+    return "⚠️ Не удалось получить анализ после 3 попыток"
 
 # ── HANDLERS ─────────────────────────────────────────────────────────────────
 async def cmd_start(message: Message, state: FSMContext):
