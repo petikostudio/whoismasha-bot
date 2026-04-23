@@ -355,8 +355,7 @@ async def finish(message: Message, answers: dict, user_info: dict, bot: Bot):
     answers_text = "\n".join([f"• {k}: {v}" for k, v in answers.items()])
     await bot.send_message(
         ADMIN_ID,
-        f"📥 *{name} (@{username}) заполнила анкету!*\n\n{answers_text}",
-        parse_mode="Markdown"
+        f"📥 {name} (@{username}) заполнила анкету!\n\n{answers_text}",
     )
 
     # 2. JSON
@@ -379,7 +378,7 @@ async def finish(message: Message, answers: dict, user_info: dict, bot: Bot):
         for i in range(0, len(analysis), 4000):
             await bot.send_message(ADMIN_ID, analysis[i:i+4000])
     else:
-        await bot.send_message(ADMIN_ID, f"🧠 *Психологический портрет {name}*\n\n{analysis}", parse_mode="Markdown")
+        await bot.send_message(ADMIN_ID, f"🧠 Психологический портрет {name}\n\n{analysis}")
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 async def main():
