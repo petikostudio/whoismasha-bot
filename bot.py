@@ -19,7 +19,7 @@ BOT_TOKEN      = os.environ.get("BOT_TOKEN", "")
 ADMIN_ID       = int(os.environ.get("ADMIN_ID", "0"))
 GONKA_API_KEY  = os.environ.get("GONKA_API_KEY", "")
 GONKA_BASE_URL = "https://proxy.gonkabroker.com/v1"
-GONKA_MODEL    = "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
+GONKA_MODEL    = "moonshotai/Kimi-K2.6"
 
 # ── PROGRESS BAR ─────────────────────────────────────────────────────────────
 def progress(step, total=14):
