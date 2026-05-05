@@ -228,7 +228,7 @@ async def get_ai_analysis(answers: dict, user_info: dict) -> str:
                             msg = error_msg.get("message", str(data))
                         else:
                             msg = str(error_msg)
-                        if "rate limit" in msg.lower() and attempt < 2:
+                        if any(x in msg.lower() for x in ("rate limit", "temporarily unavailable", "service unavailable", "overloaded")) and attempt < 2:
                             logger.warning(f"Rate limit hit, retry {attempt + 1}/3 in 20s...")
                             await asyncio.sleep(20)
                             continue
