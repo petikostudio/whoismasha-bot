@@ -43,6 +43,7 @@ class Survey(StatesGroup):
     q1  = State(); q2  = State(); q3  = State(); q4  = State(); q5  = State()
     q6  = State(); q7  = State(); q8  = State(); q9  = State(); q10 = State()
     q11 = State(); q12 = State(); q13 = State(); q14 = State()
+    reanalyze = State()
 
 Q_STATES = [
     Survey.q1,  Survey.q2,  Survey.q3,  Survey.q4,  Survey.q5,
@@ -397,6 +398,36 @@ async def finish(message: Message, answers: dict, user_info: dict, bot: Bot):
         await bot.send_message(ADMIN_ID, f"🧠 Психологический портрет {name}\n\n{analysis}")
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
+async def cmd_reanalyze(message: Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID:
+        return
+    await state.set_state(Survey.reanalyze)
+    await message.answer(
+        "Вставь JSON с ответами — тот блок который пришёл после анкеты:\n\n"
+        "<code>{\n  \"name\": \"Nika\",\n  \"answers\": { ... }\n}</code>",
+        parse_mode="HTML"
+    )
+
+async def handle_reanalyze(message: Message, state: FSMContext):
+    await state.clear()
+    try:
+        data = json.loads(message.text)
+        answers  = data.get("answers", data)
+        name     = data.get("name", "участник")
+        user_info = {"first_name": name}
+    except (json.JSONDecodeError, AttributeError):
+        await message.answer("❌ Неверный JSON. Попробуй снова — /reanalyze")
+        return
+
+    await message.answer("🧠 Генерирую психологический анализ...")
+    analysis = await get_ai_analysis(answers, user_info)
+    if len(analysis) > 4000:
+        for i in range(0, len(analysis), 4000):
+            await message.answer(analysis[i:i+4000])
+    else:
+        await message.answer(f"🧠 Психологический портрет {name}\n\n{analysis}")
+
+
 async def main():
     if not BOT_TOKEN:
         raise ValueError("BOT_TOKEN is not set")
@@ -409,6 +440,8 @@ async def main():
         BotCommand(command="restart", description="Начать заново"),
     ])
 
+    dp.message.register(cmd_reanalyze,   Command(commands=["reanalyze"]))
+    dp.message.register(handle_reanalyze, Survey.reanalyze, F.text)
     dp.message.register(cmd_start,       Command(commands=["start", "restart"]))
     dp.message.register(handle_confirm,  Survey.confirm,  F.text)
     dp.message.register(handle_reminder, Survey.reminder, F.text)
